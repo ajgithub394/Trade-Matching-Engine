@@ -27,48 +27,15 @@
         .sell {
             color: #f44747;
         }
-        #shutdownBtn {
-            float: right;
-            background-color: #f44747;
-            color: white;
-            border: none;
-            padding: 8px 12px;
-            cursor: pointer;
-            border-radius: 4px;
-        }
-        #shutdownBtn:disabled {
-            background-color: #555;
-            cursor: not-allowed;
-        }
     </style>
 </head>
 <body>
-<h1>Live Trade Feed <button id="shutdownBtn">Shutdown Server</button></h1>
+<h1>Live Trade Feed</h1>
 <div id="feed">Connecting to trade stream...</div>
 
 <script>
     const feed = document.getElementById('feed');
     const eventSource = new EventSource('/trades/stream');
-    const shutdownBtn = document.getElementById('shutdownBtn');
-
-    shutdownBtn.addEventListener('click', () => {
-        console.log('Sending shutdown request...');
-        shutdownBtn.textContent = 'Shutting down...';
-        shutdownBtn.disabled = true;
-
-        fetch('/shutdown', {
-            method: 'POST'
-        })
-        .then(response => response.text())
-        .then(data => {
-            console.log(data);
-            feed.textContent = 'Server has been shut down. Refresh to reconnect.';
-        })
-        .catch(error => {
-            console.error('Shutdown request failed:', error);
-            feed.textContent = 'Could not connect to server to shut down.';
-        });
-    });
 
     eventSource.onopen = () => {
         feed.innerHTML = "";
@@ -78,6 +45,7 @@
         const trade = JSON.parse(event.data);
         const tradeElement = document.createElement('div');
         tradeElement.className = 'trade';
+        // A simple heuristic to determine the aggressor side for coloring
         const side = trade.buyOrderId > trade.sellOrderId ? 'BUY' : 'SELL';
         tradeElement.classList.add(side.toLowerCase());
         tradeElement.textContent = `${side} ${trade.quantity} ${trade.stockSymbol} @ ${trade.price}`;
@@ -85,8 +53,7 @@
     });
 
     eventSource.onerror = err => {
-        feed.textContent = 'Connection to server lost.';
-        shutdownBtn.disabled = true;
+        feed.textContent = 'Connection to server lost. Please refresh the page.';
     };
 </script>
 </body>
