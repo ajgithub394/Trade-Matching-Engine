@@ -9,9 +9,9 @@ public class EngineController {
     private final TradeEventService tradeEventService;
     private final MatchingEngine matchingEngine;
 
-    public EngineController(TradeEventService tradeEventService){
+    public EngineController(TradeEventService tradeEventService, MatchingEngine matchingEngine) {
         this.tradeEventService = tradeEventService;
-        this.matchingEngine = new MatchingEngine(tradeEventService);
+        this.matchingEngine = matchingEngine;
     }
 
     @PostMapping("/orders")

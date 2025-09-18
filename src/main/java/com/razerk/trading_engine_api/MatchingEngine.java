@@ -1,22 +1,50 @@
-package com.razerk.trading_engine_api;
+package com.razerk.trading_engine_api; // Or your package name
 
-import java.util.*;
+import org.springframework.beans.factory.DisposableBean;
+import org.springframework.stereotype.Service;
+import java.util.List;
+import java.util.Map;
+import java.util.Queue;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.atomic.AtomicLong;
 
-public class MatchingEngine {
-    private final Map<String, OrderBook> orderBooks;
-    private final PersistenceService persistenceService = new PersistenceService();
+@Service
+public class MatchingEngine implements DisposableBean {
+    private final AtomicLong orderIdGenerator = new AtomicLong(0);
+    private final Map<String, OrderBook> orderBooks = new ConcurrentHashMap<>();
     private final TradeEventService tradeEventService;
-    public MatchingEngine(TradeEventService tradeEventService) {
+    private final OrderRepository orderRepository;
+
+    public MatchingEngine(TradeEventService tradeEventService, OrderRepository orderRepository) {
         this.tradeEventService = tradeEventService;
-        this.orderBooks = persistenceService.loadState();
+        this.orderRepository = orderRepository;
+        loadOrdersFromDatabase();
+    }
+
+    private void loadOrdersFromDatabase() {
+        System.out.println("Loading resting orders from Database....");
+        // FIX: Removed the old package name. This should just be List<Order>.
+        List<com.razerk.trading_engine_api.Order> restingOrders = orderRepository.findAll();
+        for (Order order : restingOrders) {
+            OrderBook relevantBook = orderBooks.computeIfAbsent(order.getStockSymbol(), k -> new OrderBook());
+            relevantBook.addOrder(order);
+        }
+        System.out.println("Loaded " + restingOrders.size() + " orders.");
+    }
+
+    @Override
+    public void destroy() {
+        System.out.println("Matching engine is shutting down. Database state is persistent.");
     }
 
     public Map<String, OrderBook> getOrderBooks() {
         return this.orderBooks;
     }
 
+    // FIX: Removed the old package name from the parameter.
     public void processOrder(Order newOrder) {
+        newOrder.setOrderId(orderIdGenerator.incrementAndGet());
+        newOrder.setTimestamp(System.nanoTime());
         String sym = newOrder.getStockSymbol();
         OrderBook relevantBook = orderBooks.computeIfAbsent(sym, k -> new OrderBook());
 
@@ -45,18 +73,21 @@ public class MatchingEngine {
                 Order sellOrder = ordersAtBestAsk.peek();
                 int tradeQuantity = Math.min(buyOrder.getQuantity(), sellOrder.getQuantity());
 
-                // --- For streaming the trade ---
                 Trade trade = new Trade(buyOrder.getStockSymbol(), tradeQuantity, bestAskPrice, buyOrder.getOrderId(), sellOrder.getOrderId());
                 System.out.println(trade);
                 tradeEventService.sendTradeEvent(trade);
-                // -------------------------
 
                 buyOrder.setQuantity(buyOrder.getQuantity() - tradeQuantity);
                 sellOrder.setQuantity(sellOrder.getQuantity() - tradeQuantity);
 
+                // FIX: Added persistence logic back
                 if (sellOrder.getQuantity() == 0) {
                     ordersAtBestAsk.poll();
+                    orderRepository.delete(sellOrder); // <-- DELETE from DB
+                } else {
+                    orderRepository.save(sellOrder); // <-- UPDATE in DB
                 }
+
                 if (ordersAtBestAsk.isEmpty()) {
                     orderBook.getAsks().remove(bestAskPrice);
                 }
@@ -66,6 +97,7 @@ public class MatchingEngine {
         }
         if (buyOrder.getQuantity() > 0) {
             orderBook.addOrder(buyOrder);
+            orderRepository.save(buyOrder); // <-- SAVE to DB
         }
     }
 
@@ -77,18 +109,21 @@ public class MatchingEngine {
                 Order buyOrder = ordersAtBestBid.peek();
                 int tradeQuantity = Math.min(sellOrder.getQuantity(), buyOrder.getQuantity());
 
-                // ------
                 Trade trade = new Trade(sellOrder.getStockSymbol(), tradeQuantity, bestBidPrice, buyOrder.getOrderId(), sellOrder.getOrderId());
                 System.out.println(trade);
                 tradeEventService.sendTradeEvent(trade);
-                // -------------------------
 
                 sellOrder.setQuantity(sellOrder.getQuantity() - tradeQuantity);
                 buyOrder.setQuantity(buyOrder.getQuantity() - tradeQuantity);
 
+                // FIX: Added persistence logic back
                 if (buyOrder.getQuantity() == 0) {
                     ordersAtBestBid.poll();
+                    orderRepository.delete(buyOrder); // <-- DELETE from DB
+                } else {
+                    orderRepository.save(buyOrder); // <-- UPDATE in DB
                 }
+
                 if (ordersAtBestBid.isEmpty()) {
                     orderBook.getBids().remove(bestBidPrice);
                 }
@@ -98,6 +133,7 @@ public class MatchingEngine {
         }
         if (sellOrder.getQuantity() > 0) {
             orderBook.addOrder(sellOrder);
+            orderRepository.save(sellOrder); // <-- SAVE to DB
         }
     }
 
@@ -108,18 +144,21 @@ public class MatchingEngine {
             Order sellOrder = ordersAtBestAsk.peek();
             int tradeQuantity = Math.min(buyOrder.getQuantity(), sellOrder.getQuantity());
 
-            // --- ---
             Trade trade = new Trade(buyOrder.getStockSymbol(), tradeQuantity, bestAskPrice, buyOrder.getOrderId(), sellOrder.getOrderId());
             System.out.println(trade);
             tradeEventService.sendTradeEvent(trade);
-            // -------------------------
 
             buyOrder.setQuantity(buyOrder.getQuantity() - tradeQuantity);
             sellOrder.setQuantity(sellOrder.getQuantity() - tradeQuantity);
 
+            // FIX: Added persistence logic back
             if (sellOrder.getQuantity() == 0) {
                 ordersAtBestAsk.poll();
+                orderRepository.delete(sellOrder); // <-- DELETE from DB
+            } else {
+                orderRepository.save(sellOrder); // <-- UPDATE in DB
             }
+
             if (ordersAtBestAsk.isEmpty()) {
                 orderBook.getAsks().remove(bestAskPrice);
             }
@@ -133,18 +172,21 @@ public class MatchingEngine {
             Order buyOrder = ordersAtBestBid.peek();
             int tradeQuantity = Math.min(sellOrder.getQuantity(), buyOrder.getQuantity());
 
-            // --- ---
             Trade trade = new Trade(sellOrder.getStockSymbol(), tradeQuantity, bestBidPrice, buyOrder.getOrderId(), sellOrder.getOrderId());
             System.out.println(trade);
             tradeEventService.sendTradeEvent(trade);
-            // -------------------------
 
             sellOrder.setQuantity(sellOrder.getQuantity() - tradeQuantity);
             buyOrder.setQuantity(buyOrder.getQuantity() - tradeQuantity);
 
+            // FIX: Added persistence logic back
             if (buyOrder.getQuantity() == 0) {
                 ordersAtBestBid.poll();
+                orderRepository.delete(buyOrder); // <-- DELETE from DB
+            } else {
+                orderRepository.save(buyOrder); // <-- UPDATE in DB
             }
+
             if (ordersAtBestBid.isEmpty()) {
                 orderBook.getBids().remove(bestBidPrice);
             }
