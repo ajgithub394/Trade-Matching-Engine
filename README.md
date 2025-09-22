@@ -28,3 +28,24 @@ A real-time, concurrent, multi-stock order matching engine built with Java and S
 | `GET`  | `/books/{symbol}`   | (none)       | Gets the current order book for a symbol. |
 | `GET`  | `/trades/stream`    | (none)       | Connects to the live SSE trade feed. |
 | `POST` | `/shutdown`         | (none)       | Shuts down the server gracefully.  |
+
+
+Example of a LIMIT type order body :
+
+{
+    "stockSymbol": "AAPL",
+    "side": "BUY",
+    "orderType": "LIMIT",
+    "price": 150.75,
+    "quantity": 100
+}
+
+Example of a MARKET type order body :
+
+{
+    "stockSymbol": "GOOG",
+    "side": "SELL",
+    "orderType": "MARKET",
+    "price": 0.0,
+    "quantity": 50
+}
